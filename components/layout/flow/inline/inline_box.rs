@@ -10,9 +10,13 @@ use layout_api::LayoutNode;
 use malloc_size_of_derive::MallocSizeOf;
 use script::layout_dom::ServoLayoutNode;
 use servo_arc::Arc as ServoArc;
+use style::Zero;
+use style::computed_values::alignment_baseline::T as AlignmentBaseline;
+use style::computed_values::baseline_source::T as BaselineSource;
 use style::computed_values::box_decoration_break::T as BoxDecorationBreak;
 use style::context::SharedStyleContext;
 use style::properties::ComputedValues;
+use style::values::computed::{BaselineShift, LengthPercentage};
 
 use super::{
     InlineContainerState, InlineContainerStateFlags, SharedInlineStyles,
@@ -24,7 +28,7 @@ use crate::context::LayoutContext;
 use crate::dom_traversal::NodeAndStyleInfo;
 use crate::fragment_tree::BaseFragmentInfo;
 use crate::layout_box_base::LayoutBoxBase;
-use crate::style_ext::{LayoutStyle, PaddingBorderMargin};
+use crate::style_ext::{ComputedValuesExt, LayoutStyle, PaddingBorderMargin};
 
 #[derive(Debug, MallocSizeOf)]
 pub(crate) struct InlineBox {
@@ -64,6 +68,69 @@ impl InlineBox {
         self.base.repair_style(new_style);
         *self.shared_inline_styles.style.borrow_mut() = new_style.clone();
         *self.shared_inline_styles.selected.borrow_mut() = node.selected_style(context);
+    }
+
+    /// An implementation of the conditions from <https://drafts.csswg.org/css-text/#boundary-shaping>.
+    pub(crate) fn breaks_shaping_at_inline_start(&self) -> bool {
+        // > Text shaping must be broken at inline box boundaries when any of the
+        // > following are true for any box whose boundary separates the two typographic
+        // > character units:
+        // > - Any of margin/border/padding separating the two typographic character units
+        // >   in the inline axis is non-zero.
+        // > - `vertical-align` is not `baseline`.
+        // > - The boundary is a bidi isolation boundary.
+        //
+        // Note: These steps are reordered for performance reasons and bidi isolation is handled
+        // intrinsically by the fact that bidi isolation inserts bidi characters into the inline
+        // formatting context text content. This leads to non-contiguous character offsets between
+        // shaping queue entries.
+        let style = &self.base.style;
+        if style.clone_baseline_shift() != BaselineShift::zero() ||
+            style.clone_baseline_source() != BaselineSource::Auto ||
+            style.clone_alignment_baseline() != AlignmentBaseline::Baseline
+        {
+            return true;
+        }
+
+        let layout_style = LayoutStyle::Default(style);
+        let border_widths = layout_style.border_width(style.writing_mode);
+        if !border_widths.inline_start.is_zero() {
+            return true;
+        }
+        let padding = layout_style.padding(style.writing_mode);
+        if !padding.inline_start.is_zero() {
+            return true;
+        }
+        let margin = style.margin(style.writing_mode);
+        !margin
+            .inline_start
+            .non_auto()
+            .is_none_or(LengthPercentage::is_zero)
+    }
+
+    pub(crate) fn breaks_shaping_at_inline_end(&self) -> bool {
+        let style = &self.base.style;
+        if style.clone_baseline_shift() != BaselineShift::zero() ||
+            style.clone_baseline_source() != BaselineSource::Auto ||
+            style.clone_alignment_baseline() != AlignmentBaseline::Baseline
+        {
+            return true;
+        }
+
+        let layout_style = LayoutStyle::Default(style);
+        let border_widths = layout_style.border_width(style.writing_mode);
+        if !border_widths.inline_end.is_zero() {
+            return true;
+        }
+        let padding = layout_style.padding(style.writing_mode);
+        if !padding.inline_end.is_zero() {
+            return true;
+        }
+        let margin = self.base.style.margin(style.writing_mode);
+        !margin
+            .inline_end
+            .non_auto()
+            .is_none_or(LengthPercentage::is_zero)
     }
 }
 
