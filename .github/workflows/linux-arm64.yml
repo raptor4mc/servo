@@ -24,6 +24,7 @@ on:
         type: boolean
       wpt:
         required: false
+        default: false
         type: boolean
       number-of-wpt-chunks:
         default: 20
@@ -57,7 +58,6 @@ on:
         required: false
         default: false
         type: boolean
-
   workflow_dispatch:
     inputs:
       profile:
@@ -75,6 +75,7 @@ on:
         type: boolean
       wpt:
         required: false
+        default: false
         type: boolean
       number-of-wpt-chunks:
         default: 20
@@ -104,11 +105,9 @@ on:
         required: false
         default: false
         type: boolean
-
 env:
   RUST_BACKTRACE: 1
   SHELL: /bin/bash
-
 jobs:
   linux-arm64:
     name: Call common linux workflow for arm64
@@ -131,4 +130,3 @@ jobs:
       bencher: ${{ inputs.bencher }}
       coverage: ${{ inputs.coverage }}
       capi: ${{ inputs.capi }}
-
