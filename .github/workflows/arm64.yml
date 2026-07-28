@@ -1,0 +1,33 @@
+name: Build on ARM64
+on: workflow_dispatch  # manual trigger — run it from the Actions tab whenever you want
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 350  # GH Actions caps free jobs at 6hrs; Servo can be slow
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Rust
+        run: curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain none
+
+      - name: Bootstrap
+        run: ./mach bootstrap -y
+
+      - name: Build
+        run: ./mach build
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: servo-aarch64
+          path: target/debug/servo  # adjust path if it differs
